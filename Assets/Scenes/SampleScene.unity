@@ -11688,6 +11688,8 @@ GameObject:
   - component: {fileID: 5298317105666637830}
   - component: {fileID: 1657604183120665614}
   - component: {fileID: 5848363711686884241}
+  - component: {fileID: 5848363711686884243}
+  - component: {fileID: 5848363711686884242}
   m_Layer: 0
   m_Name: EA03_Prop_House_Door_01b_PRE LOD0
   m_TagString: Untagged
@@ -37055,6 +37057,44 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &5848363711686884242
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1312579913191182977}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ceaf7114a71e64b4db0574f3e049e448, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DoorController
+  doorHinge: {fileID: 0}
+  playerTag: Player
+  interactionDistance: 2.5
+  openAngle: 90
+  rotationSpeed: 120
+--- !u!65 &5848363711686884243
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1312579913191182977}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.17768642, y: 2.5307238, z: 1.3868546}
+  m_Center: {x: -0.0070366547, y: 1.2653619, z: 0.61267686}
 --- !u!4 &5850016302255478941
 Transform:
   m_ObjectHideFlags: 0
