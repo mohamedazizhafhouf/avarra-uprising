@@ -3,6 +3,8 @@ using UnityEngine.AI;
 
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(Animator))]
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(Collider))]
 public class RhinoAI : MonoBehaviour
 {
     [Header("Detection")]
@@ -23,9 +25,15 @@ public class RhinoAI : MonoBehaviour
     [Header("Patrol (optional)")]
     public Transform[] waypoints;
 
+    [Header("Physics")]
+    [Tooltip("Push force applied to Rigidbodies the rhino bumps into (e.g. player with CC won't be pushed, but debris will).")]
+    public float pushPower = 2f;
+
     private NavMeshAgent agent;
     private Animator anim;
+    private Rigidbody rb;
     private Transform player;
+    private PlayerHealth playerHealth;   // cached, avoids SendMessage
 
     private float lastAttackTime;
     private int patrolIndex;
@@ -46,13 +54,26 @@ public class RhinoAI : MonoBehaviour
     {
         agent = GetComponent<NavMeshAgent>();
         anim = GetComponent<Animator>();
+        rb = GetComponent<Rigidbody>();
+
+        // --- CRITICAL: stop Rigidbody physics from fighting the NavMeshAgent ---
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezeRotationX
+                       | RigidbodyConstraints.FreezeRotationY
+                       | RigidbodyConstraints.FreezeRotationZ;
+
         currentHealth = maxHealth;
     }
 
     void Start()
     {
         GameObject p = GameObject.FindGameObjectWithTag("Player");
-        if (p != null) player = p.transform;
+        if (p != null)
+        {
+            player = p.transform;
+            playerHealth = p.GetComponent<PlayerHealth>();
+        }
         agent.speed = walkSpeed;
     }
 
@@ -62,12 +83,18 @@ public class RhinoAI : MonoBehaviour
         if (player == null)
         {
             var p = GameObject.FindGameObjectWithTag("Player");
-            if (p != null) player = p.transform;
+            if (p != null)
+            {
+                player = p.transform;
+                playerHealth = p.GetComponent<PlayerHealth>();
+            }
         }
 
         if (isDead) return;
 
-        float distToPlayer = player ? Vector3.Distance(transform.position, player.position) : Mathf.Infinity;
+        float distToPlayer = player
+            ? Vector3.Distance(transform.position, player.position)
+            : Mathf.Infinity;
 
         switch (state)
         {
@@ -76,7 +103,6 @@ public class RhinoAI : MonoBehaviour
             case State.Attack: TickAttack(distToPlayer); break;
         }
 
-        // Use desiredVelocity for smoother animation blending
         anim.SetFloat(SpeedHash, agent.desiredVelocity.magnitude);
     }
 
@@ -166,6 +192,11 @@ public class RhinoAI : MonoBehaviour
         state = State.Dead;
         agent.isStopped = true;
         agent.ResetPath();
+
+        // Let the corpse fall / be pushed now that it's dead
+        rb.isKinematic = false;
+        rb.useGravity = true;
+
         anim.SetBool(DeadHash, true);
     }
 
@@ -176,8 +207,25 @@ public class RhinoAI : MonoBehaviour
 
         if (Vector3.Distance(transform.position, player.position) <= attackRange + 0.5f)
         {
-            player.SendMessage("TakeDamage", attackDamage, SendMessageOptions.DontRequireReceiver);
+            // Prefer direct call — SendMessage is fragile
+            if (playerHealth != null)
+                playerHealth.TakeDamage(attackDamage);
+            else
+                player.SendMessage("TakeDamage", attackDamage, SendMessageOptions.DontRequireReceiver);
         }
+    }
+
+    // ---------- PHYSICS: PUSH THINGS THE RHINO BUMPS ----------
+    void OnCollisionEnter(Collision collision)
+    {
+        // Kinematic Rigidbodies don't receive OnCollisionEnter from other kinematic bodies.
+        // But if the rhino is temporarily non-kinematic (dead), this still fires.
+        Rigidbody other = collision.rigidbody;
+        if (other == null || other.isKinematic) return;
+
+        Vector3 pushDir = collision.contacts[0].point - transform.position;
+        pushDir.y = 0;
+        other.AddForce(pushDir.normalized * pushPower, ForceMode.Impulse);
     }
 
     // ---------- GIZMOS ----------

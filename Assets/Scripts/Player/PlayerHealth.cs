@@ -15,6 +15,8 @@ public class PlayerHealth : MonoBehaviour
     [SerializeField] private bool destroyOnDeath = false;
     [SerializeField] private float destroyDelay = 3f;
 
+    [Header("UI")]
+    [SerializeField] private GameOverUI gameOverUI;
     // Events - UI and other systems subscribe to these
     public event Action<int, int> OnHealthChanged;   // (current, max)
     public event Action OnDamaged;
@@ -32,12 +34,11 @@ public class PlayerHealth : MonoBehaviour
 
     void Start()
     {
-        // Fire initial event so UI shows the correct value on start
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
     /// <summary>
-    /// Called by enemies via SendMessage("TakeDamage", amount)
+    /// Called by enemies. Kept SendMessage-compatible AND directly callable.
     /// </summary>
     public void TakeDamage(int amount)
     {
@@ -69,8 +70,11 @@ public class PlayerHealth : MonoBehaviour
         IsDead = true;
         OnDeath?.Invoke();
 
-        // Optional: disable controls, ragdoll, etc.
-        // GetComponent<PlayerController>()?.enabled = false;
+        var cc = GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = false;
+
+        if (gameOverUI != null)
+            gameOverUI.ShowGameOver();
 
         if (destroyOnDeath)
             Destroy(gameObject, destroyDelay);

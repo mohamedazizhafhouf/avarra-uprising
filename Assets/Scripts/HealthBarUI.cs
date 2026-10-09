@@ -13,6 +13,9 @@ public class HealthBarUI : MonoBehaviour
     [SerializeField] private bool smooth = true;
     [SerializeField] private float smoothSpeed = 6f;
 
+    [Header("UI")]
+    [SerializeField] private GameOverUI gameOverUI;
+
     private float targetFill = 1f;
 
     void OnEnable()
@@ -60,4 +63,5 @@ public class HealthBarUI : MonoBehaviour
         if (healthText != null)
             healthText.text = $"{current} / {max}";
     }
+
 }
