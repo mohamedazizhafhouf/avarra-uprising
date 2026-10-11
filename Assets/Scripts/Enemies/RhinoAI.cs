@@ -168,6 +168,17 @@ public class RhinoAI : MonoBehaviour
             lastAttackTime = Time.time;
             anim.SetTrigger(AttackHash);
         }
+
+        if (dist <= detectRange && player != null)
+        {
+            anim.SetTrigger(ShoutHash);
+            state = State.Chase;
+
+            // NEW: tell the UI to appear
+            GetComponent<RhinoHealthUI>()?.ShowHealthBar();
+
+            return;
+        }
     }
 
     // ---------- PUBLIC METHODS ----------
@@ -183,6 +194,9 @@ public class RhinoAI : MonoBehaviour
         }
 
         anim.SetTrigger(GetHitHash);
+
+        GetComponent<RhinoHealthUI>()?.SetHealth(currentHealth, maxHealth);
+
     }
 
     public void Die()
@@ -198,6 +212,9 @@ public class RhinoAI : MonoBehaviour
         rb.useGravity = true;
 
         anim.SetBool(DeadHash, true);
+
+        GetComponent<RhinoHealthUI>()?.OnRhinoDied();
+
     }
 
     // ---------- CALLED BY ANIMATION EVENTS ----------
