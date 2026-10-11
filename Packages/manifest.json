@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#v10.2.0",
+    "com.unity-beginner-assistant.tutor": "file:D:/tekup/ing 5/machine deep learning/project/unity-vl-assistant/unity_package/UnityBeginnerAssistant",
     "com.unity.ai.assistant": "2.19.0-pre.2",
     "com.unity.ai.inference": "2.6.1",
     "com.unity.ai.navigation": "2.0.14",

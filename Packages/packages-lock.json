@@ -17,6 +17,12 @@
       },
       "hash": "30d22075093d1d35dfb0091c1c7550e9ad948577"
     },
+    "com.unity-beginner-assistant.tutor": {
+      "version": "file:D:/tekup/ing 5/machine deep learning/project/unity-vl-assistant/unity_package/UnityBeginnerAssistant",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {}
+    },
     "com.unity.2d.sprite": {
       "version": "1.0.0",
       "depth": 1,
