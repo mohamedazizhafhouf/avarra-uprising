@@ -20621,6 +20621,7 @@ MonoBehaviour:
   attackRadius: 1
   attackCooldown: 0.7
   attackAngle: 120
+  hitWindowDuration: 0.18
   enemyLayer:
     serializedVersion: 2
     m_Bits: 128

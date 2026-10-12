@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -16,6 +17,7 @@ public class PlayerAttack : MonoBehaviour
     [SerializeField] private float attackRadius = 1.2f;
     [SerializeField] private float attackCooldown = 0.6f;
     [SerializeField] private float attackAngle = 120f;
+    [SerializeField, Min(0.02f)] private float hitWindowDuration = 0.18f;
 
     [Header("Targeting")]
     [SerializeField] private LayerMask enemyLayer;
@@ -25,6 +27,8 @@ public class PlayerAttack : MonoBehaviour
 
     private float lastAttackTime = -999f;
     private bool isAttacking;
+    private Coroutine hitWindowCoroutine;
+    private readonly HashSet<RhinoAI> damagedThisAttack = new HashSet<RhinoAI>();
 
     private static readonly int AttackHash = Animator.StringToHash("attack");
 
@@ -55,6 +59,7 @@ public class PlayerAttack : MonoBehaviour
 
         lastAttackTime = Time.time;
         isAttacking = true;
+        damagedThisAttack.Clear();
 
         // Fire the sword's own attack animation
         swordAnimator.SetTrigger(AttackHash);
@@ -66,34 +71,51 @@ public class PlayerAttack : MonoBehaviour
     /// </summary>
     public void OnSwingHit()
     {
-        Vector3 origin = attackOrigin.position;
-        Vector3 forward = transform.forward;
+        if (hitWindowCoroutine != null)
+            StopCoroutine(hitWindowCoroutine);
 
-        Collider[] hits = Physics.OverlapSphere(origin, attackRange, enemyLayer);
-        HashSet<GameObject> damaged = new HashSet<GameObject>();
+        hitWindowCoroutine = StartCoroutine(DamageWindow());
+    }
+
+    private IEnumerator DamageWindow()
+    {
+        float endTime = Time.time + hitWindowDuration;
+
+        do
+        {
+            DetectHits();
+            yield return new WaitForFixedUpdate();
+        }
+        while (isAttacking && Time.time <= endTime);
+
+        hitWindowCoroutine = null;
+    }
+
+    private void DetectHits()
+    {
+        Transform playerRoot = transform.root;
+        Vector3 bladeBase = playerRoot.position + Vector3.up * 0.9f;
+        Vector3 bladeTip = attackOrigin.position;
+
+        Collider[] hits = Physics.OverlapCapsule(
+            bladeBase,
+            bladeTip,
+            attackRadius,
+            enemyLayer,
+            QueryTriggerInteraction.Collide);
 
         foreach (var hit in hits)
         {
-            if (hit.transform.IsChildOf(transform)) continue;
+            if (hit.transform.IsChildOf(playerRoot)) continue;
 
-            Vector3 toEnemy = hit.transform.position - transform.position;
-            toEnemy.y = 0;
+            RhinoAI rhino = hit.GetComponentInParent<RhinoAI>();
+            if (rhino == null && hit.attachedRigidbody != null)
+                rhino = hit.attachedRigidbody.GetComponent<RhinoAI>();
 
-            if (Vector3.Angle(forward, toEnemy) > attackAngle * 0.5f) continue;
-            if (toEnemy.magnitude > attackRange + attackRadius) continue;
+            if (rhino == null || !damagedThisAttack.Add(rhino)) continue;
 
-            GameObject root = hit.attachedRigidbody
-                ? hit.attachedRigidbody.gameObject
-                : hit.transform.root.gameObject;
-
-            if (!damaged.Add(root)) continue;
-
-            var rhino = root.GetComponentInChildren<RhinoAI>();
-            if (rhino != null)
-            {
-                rhino.TakeDamage(attackDamage);
-                Debug.Log($"Hit {root.name} for {attackDamage}");
-            }
+            rhino.TakeDamage(attackDamage);
+            Debug.Log($"Hit {rhino.name} for {attackDamage}");
         }
     }
 
@@ -103,6 +125,12 @@ public class PlayerAttack : MonoBehaviour
     public void OnAttackFinished()
     {
         isAttacking = false;
+
+        if (hitWindowCoroutine != null)
+        {
+            StopCoroutine(hitWindowCoroutine);
+            hitWindowCoroutine = null;
+        }
     }
 
     void OnDrawGizmosSelected()
@@ -110,9 +138,13 @@ public class PlayerAttack : MonoBehaviour
         if (!drawGizmos) return;
 
         Transform o = attackOrigin != null ? attackOrigin : transform;
+        Transform playerRoot = transform.root;
+        Vector3 bladeBase = playerRoot.position + Vector3.up * 0.9f;
 
         Gizmos.color = new Color(1f, 0.5f, 0f, 0.35f);
-        Gizmos.DrawWireSphere(o.position, attackRange);
+        Gizmos.DrawWireSphere(bladeBase, attackRadius);
+        Gizmos.DrawWireSphere(o.position, attackRadius);
+        Gizmos.DrawLine(bladeBase, o.position);
 
         Gizmos.color = Color.red;
         Gizmos.DrawRay(transform.position, transform.forward * attackRange);
