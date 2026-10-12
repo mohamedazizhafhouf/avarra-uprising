@@ -4646,7 +4646,7 @@ MonoBehaviour:
     m_Bits: 8
   attackCooldown: 0.1
   attackDamage: 34
-  maxHealth: 10
+  maxHealth: 100
   walkSpeed: 2.9
   runSpeed: 9
   waypoints:
@@ -6639,7 +6639,7 @@ MonoBehaviour:
     m_Bits: 8
   attackCooldown: 0.1
   attackDamage: 34
-  maxHealth: 10
+  maxHealth: 100
   walkSpeed: 2.9
   runSpeed: 9
   waypoints:
@@ -41630,7 +41630,7 @@ MonoBehaviour:
     m_Bits: 8
   attackCooldown: 0.1
   attackDamage: 34
-  maxHealth: 10
+  maxHealth: 100
   walkSpeed: 2.9
   runSpeed: 9
   waypoints:

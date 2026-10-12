@@ -186,7 +186,11 @@ public class RhinoAI : MonoBehaviour
     {
         if (isDead) return;
 
-        currentHealth -= amount;
+        currentHealth = Mathf.Max(0, currentHealth - amount);
+
+        // Keep the health bar in sync for every hit, including the lethal hit.
+        GetComponent<RhinoHealthUI>()?.SetHealth(currentHealth, maxHealth);
+
         if (currentHealth <= 0)
         {
             Die();
@@ -194,9 +198,6 @@ public class RhinoAI : MonoBehaviour
         }
 
         anim.SetTrigger(GetHitHash);
-
-        GetComponent<RhinoHealthUI>()?.SetHealth(currentHealth, maxHealth);
-
     }
 
     public void Die()
