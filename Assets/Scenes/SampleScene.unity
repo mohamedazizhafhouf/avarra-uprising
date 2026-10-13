@@ -4639,14 +4639,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RhinoAI
   detectRange: 13
-  attackRange: 3.65
+  attackRange: 4.5
   loseRange: 20
   playerLayer:
     serializedVersion: 2
     m_Bits: 8
-  attackCooldown: 0.05
+  attackCooldown: 2
   attackDamage: 50
   maxHealth: 100
+  attackPoint: {fileID: 0}
+  attackPointOffset: {x: 0, y: 0.8, z: 3.1}
+  attackHitRadius: 1.35
+  attackHitAngle: 100
+  attackLockDuration: 1.5
   walkSpeed: 2.9
   runSpeed: 9
   waypoints:
@@ -6632,14 +6637,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RhinoAI
   detectRange: 13
-  attackRange: 3.65
+  attackRange: 4.5
   loseRange: 20
   playerLayer:
     serializedVersion: 2
     m_Bits: 8
-  attackCooldown: 0.05
+  attackCooldown: 2
   attackDamage: 34
   maxHealth: 100
+  attackPoint: {fileID: 0}
+  attackPointOffset: {x: 0, y: 0.8, z: 3.1}
+  attackHitRadius: 1.35
+  attackHitAngle: 100
+  attackLockDuration: 1.5
   walkSpeed: 2.9
   runSpeed: 9
   waypoints:
@@ -41624,14 +41634,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RhinoAI
   detectRange: 13
-  attackRange: 3.6555
+  attackRange: 4.5
   loseRange: 22
   playerLayer:
     serializedVersion: 2
     m_Bits: 8
-  attackCooldown: 0.05
+  attackCooldown: 2
   attackDamage: 50
   maxHealth: 100
+  attackPoint: {fileID: 0}
+  attackPointOffset: {x: 0, y: 0.8, z: 3.1}
+  attackHitRadius: 1.35
+  attackHitAngle: 100
+  attackLockDuration: 1.5
   walkSpeed: 2.9
   runSpeed: 9
   waypoints:

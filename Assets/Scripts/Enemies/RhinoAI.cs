@@ -10,7 +10,7 @@ public class RhinoAI : MonoBehaviour
 {
     [Header("Detection")]
     public float detectRange = 12f;
-    public float attackRange = 2.5f;
+    public float attackRange = 4.5f;
     public float loseRange = 18f;
     public LayerMask playerLayer;
 
@@ -19,14 +19,21 @@ public class RhinoAI : MonoBehaviour
     public int attackDamage = 20;
     public int maxHealth = 100;
 
-    [Tooltip("Seconds from the start of the attack animation to its hit frame.")]
-    [SerializeField, Min(0f)] private float attackHitDelay = 0.5f;
+    [Header("Attack Hitbox")]
+    [Tooltip("Optional animated head or horn transform. Uses Attack Point Offset when unassigned.")]
+    [SerializeField] private Transform attackPoint;
 
-    [Tooltip("Recovery after the hit frame before another attack can begin.")]
-    [SerializeField, Min(0f)] private float attackRecoveryDuration = 0.75f;
+    [Tooltip("Local-space head/horn position used when Attack Point is unassigned.")]
+    [SerializeField] private Vector3 attackPointOffset = new Vector3(0f, 0.8f, 3.1f);
 
-    [Tooltip("Extra reach allowed at the hit frame so small movement does not make a visible hit miss.")]
-    [SerializeField, Min(0f)] private float attackRangeBuffer = 0.5f;
+    [Tooltip("Radius of the head/horn strike evaluated only at the animation impact event.")]
+    [SerializeField, Min(0.1f)] private float attackHitRadius = 1.35f;
+
+    [Tooltip("Forward-facing arc of the strike. Players beside or behind the Rhino are not hit.")]
+    [SerializeField, Range(1f, 180f)] private float attackHitAngle = 100f;
+
+    [Tooltip("Locks out another attack until the current attack animation and recovery finish.")]
+    [SerializeField, Min(0.1f)] private float attackLockDuration = 1.5f;
 
     [Header("Movement Speeds")]
     public float walkSpeed = 1.5f;
@@ -44,6 +51,7 @@ public class RhinoAI : MonoBehaviour
     private Rigidbody rb;
     private Transform player;
     private PlayerHealth playerHealth;   // cached, avoids SendMessage
+    private Collider playerCollider;
 
     private float lastAttackTime;
     private int patrolIndex;
@@ -145,6 +153,7 @@ public class RhinoAI : MonoBehaviour
             state = State.Attack;
             agent.isStopped = true;
             agent.ResetPath();
+            agent.updateRotation = false;
             return;
         }
 
@@ -157,8 +166,13 @@ public class RhinoAI : MonoBehaviour
         {
             state = State.Patrol;
             agent.isStopped = false;
+            agent.updateRotation = true;
             return;
         }
+
+        // Commit to the swing once it starts. Chasing and turning during the
+        // animation made the hit appear to follow the player unnaturally.
+        if (attackInProgress) return;
 
         Vector3 look = player.position - transform.position;
         look.y = 0;
@@ -172,10 +186,17 @@ public class RhinoAI : MonoBehaviour
         {
             state = State.Chase;
             agent.isStopped = false;
+            agent.updateRotation = true;
             return;
         }
 
-        if (!attackInProgress && Time.time - lastAttackTime >= attackCooldown)
+        // Finish facing the target before committing. After BeginAttack the
+        // orientation stays locked, giving the player a real dodge window.
+        if (look.sqrMagnitude > 0.001f &&
+            Vector3.Angle(transform.forward, look) > 12f)
+            return;
+
+        if (Time.time - lastAttackTime >= attackCooldown)
         {
             BeginAttack();
         }
@@ -186,7 +207,6 @@ public class RhinoAI : MonoBehaviour
         GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
         if (playerObject == null) return;
 
-        player = playerObject.transform;
         playerHealth = playerObject.GetComponent<PlayerHealth>();
 
         if (playerHealth == null)
@@ -194,6 +214,19 @@ public class RhinoAI : MonoBehaviour
 
         if (playerHealth == null)
             playerHealth = playerObject.GetComponentInChildren<PlayerHealth>();
+
+        if (playerHealth == null)
+        {
+            player = null;
+            playerCollider = null;
+            Debug.LogWarning("[RhinoAI] Player tag found without PlayerHealth in its hierarchy.", playerObject);
+            return;
+        }
+
+        // The scene tags both the Player root and its PlayerArmature child.
+        // Always track the actual character, irrespective of which Unity finds.
+        player = playerHealth.transform;
+        playerCollider = playerHealth.GetComponent<Collider>();
     }
 
     private void BeginAttack()
@@ -211,15 +244,9 @@ public class RhinoAI : MonoBehaviour
 
     private IEnumerator AttackSequence()
     {
-        if (attackHitDelay > 0f)
-            yield return new WaitForSeconds(attackHitDelay);
-
-        // The animation event normally resolves the hit. This is a fallback for
-        // transitions or frame skips that prevent the event from being delivered.
-        ResolveAttackDamage();
-
-        if (attackRecoveryDuration > 0f)
-            yield return new WaitForSeconds(attackRecoveryDuration);
+        // Damage is deliberately NOT applied here. The Attack animation's
+        // ApplyDamage event is the single authoritative impact moment.
+        yield return new WaitForSeconds(attackLockDuration);
 
         attackInProgress = false;
         attackRoutine = null;
@@ -281,21 +308,29 @@ public class RhinoAI : MonoBehaviour
         if (!attackInProgress || attackDamageResolved || isDead || player == null)
             return;
 
-        // Resolve only once per attack, whether this method was reached by the
-        // animation event or by AttackSequence's fallback.
+        // The animation event is the only entry point, and each swing can hit once.
         attackDamageResolved = true;
 
-        Vector3 toPlayer = player.position - transform.position;
-        toPlayer.y = 0f;
-        float damageRange = attackRange + attackRangeBuffer;
+        Vector3 hitOrigin = GetAttackHitOrigin();
 
-        if (toPlayer.sqrMagnitude > damageRange * damageRange)
+        Vector3 targetPoint = playerCollider != null
+            ? playerCollider.ClosestPoint(hitOrigin)
+            : player.position;
+
+        Vector3 toPlayer = targetPoint - hitOrigin;
+
+        if (toPlayer.sqrMagnitude > attackHitRadius * attackHitRadius)
             return;
 
-        if (playerHealth == null)
-            FindPlayer();
+        Vector3 flatDirection = Vector3.ProjectOnPlane(toPlayer, Vector3.up);
+        if (flatDirection.sqrMagnitude > 0.0001f)
+        {
+            float halfAngle = attackHitAngle * 0.5f;
+            if (Vector3.Angle(transform.forward, flatDirection) > halfAngle)
+                return;
+        }
 
-        if (playerHealth != null)
+        if (playerHealth != null && !playerHealth.IsDead)
         {
             playerHealth.TakeDamage(attackDamage);
         }
@@ -303,6 +338,15 @@ public class RhinoAI : MonoBehaviour
         {
             Debug.LogWarning("[RhinoAI] The tagged Player has no PlayerHealth component.", player);
         }
+    }
+
+    private Vector3 GetAttackHitOrigin()
+    {
+        // The Rhino scene objects have 2x scale. Use an offset in world units
+        // so the fallback hitbox stays by the head instead of stretching out.
+        return attackPoint != null
+            ? attackPoint.position
+            : transform.position + transform.rotation * attackPointOffset;
     }
 
     // ---------- PHYSICS: PUSH THINGS THE RHINO BUMPS ----------
@@ -327,5 +371,17 @@ public class RhinoAI : MonoBehaviour
         Gizmos.DrawWireSphere(transform.position, attackRange);
         Gizmos.color = Color.gray;
         Gizmos.DrawWireSphere(transform.position, loseRange);
+
+        Vector3 hitOrigin = GetAttackHitOrigin();
+
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawWireSphere(hitOrigin, attackHitRadius);
+
+        Vector3 leftEdge = Quaternion.AngleAxis(-attackHitAngle * 0.5f, Vector3.up)
+            * transform.forward;
+        Vector3 rightEdge = Quaternion.AngleAxis(attackHitAngle * 0.5f, Vector3.up)
+            * transform.forward;
+        Gizmos.DrawRay(hitOrigin, leftEdge * attackHitRadius);
+        Gizmos.DrawRay(hitOrigin, rightEdge * attackHitRadius);
     }
 }
