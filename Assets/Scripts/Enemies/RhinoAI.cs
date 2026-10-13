@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -17,6 +18,15 @@ public class RhinoAI : MonoBehaviour
     public float attackCooldown = 2f;
     public int attackDamage = 20;
     public int maxHealth = 100;
+
+    [Tooltip("Seconds from the start of the attack animation to its hit frame.")]
+    [SerializeField, Min(0f)] private float attackHitDelay = 0.5f;
+
+    [Tooltip("Recovery after the hit frame before another attack can begin.")]
+    [SerializeField, Min(0f)] private float attackRecoveryDuration = 0.75f;
+
+    [Tooltip("Extra reach allowed at the hit frame so small movement does not make a visible hit miss.")]
+    [SerializeField, Min(0f)] private float attackRangeBuffer = 0.5f;
 
     [Header("Movement Speeds")]
     public float walkSpeed = 1.5f;
@@ -39,6 +49,9 @@ public class RhinoAI : MonoBehaviour
     private int patrolIndex;
     private int currentHealth;
     private bool isDead;
+    private bool attackInProgress;
+    private bool attackDamageResolved;
+    private Coroutine attackRoutine;
 
     private static readonly int SpeedHash = Animator.StringToHash("Speed");
     private static readonly int ShoutHash = Animator.StringToHash("Shout");
@@ -68,12 +81,7 @@ public class RhinoAI : MonoBehaviour
 
     void Start()
     {
-        GameObject p = GameObject.FindGameObjectWithTag("Player");
-        if (p != null)
-        {
-            player = p.transform;
-            playerHealth = p.GetComponent<PlayerHealth>();
-        }
+        FindPlayer();
         agent.speed = walkSpeed;
     }
 
@@ -81,14 +89,7 @@ public class RhinoAI : MonoBehaviour
     {
         // Re-find player if destroyed/respawned
         if (player == null)
-        {
-            var p = GameObject.FindGameObjectWithTag("Player");
-            if (p != null)
-            {
-                player = p.transform;
-                playerHealth = p.GetComponent<PlayerHealth>();
-            }
-        }
+            FindPlayer();
 
         if (isDead) return;
 
@@ -113,6 +114,7 @@ public class RhinoAI : MonoBehaviour
         {
             anim.SetTrigger(ShoutHash);
             state = State.Chase;
+            GetComponent<RhinoHealthUI>()?.ShowHealthBar();
             return;
         }
 
@@ -127,6 +129,7 @@ public class RhinoAI : MonoBehaviour
 
     void TickChase(float dist)
     {
+        agent.isStopped = false;
         agent.speed = runSpeed;
 
         if (dist > loseRange)
@@ -140,6 +143,7 @@ public class RhinoAI : MonoBehaviour
         if (dist <= attackRange)
         {
             state = State.Attack;
+            agent.isStopped = true;
             agent.ResetPath();
             return;
         }
@@ -149,6 +153,13 @@ public class RhinoAI : MonoBehaviour
 
     void TickAttack(float dist)
     {
+        if (player == null)
+        {
+            state = State.Patrol;
+            agent.isStopped = false;
+            return;
+        }
+
         Vector3 look = player.position - transform.position;
         look.y = 0;
         if (look.sqrMagnitude > 0.001f)
@@ -160,25 +171,58 @@ public class RhinoAI : MonoBehaviour
         if (dist > attackRange)
         {
             state = State.Chase;
+            agent.isStopped = false;
             return;
         }
 
-        if (Time.time - lastAttackTime >= attackCooldown)
+        if (!attackInProgress && Time.time - lastAttackTime >= attackCooldown)
         {
-            lastAttackTime = Time.time;
-            anim.SetTrigger(AttackHash);
+            BeginAttack();
         }
+    }
 
-        if (dist <= detectRange && player != null)
-        {
-            anim.SetTrigger(ShoutHash);
-            state = State.Chase;
+    private void FindPlayer()
+    {
+        GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
+        if (playerObject == null) return;
 
-            // NEW: tell the UI to appear
-            GetComponent<RhinoHealthUI>()?.ShowHealthBar();
+        player = playerObject.transform;
+        playerHealth = playerObject.GetComponent<PlayerHealth>();
 
-            return;
-        }
+        if (playerHealth == null)
+            playerHealth = playerObject.GetComponentInParent<PlayerHealth>();
+
+        if (playerHealth == null)
+            playerHealth = playerObject.GetComponentInChildren<PlayerHealth>();
+    }
+
+    private void BeginAttack()
+    {
+        lastAttackTime = Time.time;
+        attackInProgress = true;
+        attackDamageResolved = false;
+
+        // A queued shout can otherwise interrupt the attack before its event.
+        anim.ResetTrigger(ShoutHash);
+        anim.SetTrigger(AttackHash);
+
+        attackRoutine = StartCoroutine(AttackSequence());
+    }
+
+    private IEnumerator AttackSequence()
+    {
+        if (attackHitDelay > 0f)
+            yield return new WaitForSeconds(attackHitDelay);
+
+        // The animation event normally resolves the hit. This is a fallback for
+        // transitions or frame skips that prevent the event from being delivered.
+        ResolveAttackDamage();
+
+        if (attackRecoveryDuration > 0f)
+            yield return new WaitForSeconds(attackRecoveryDuration);
+
+        attackInProgress = false;
+        attackRoutine = null;
     }
 
     // ---------- PUBLIC METHODS ----------
@@ -205,6 +249,14 @@ public class RhinoAI : MonoBehaviour
         if (isDead) return;
         isDead = true;
         state = State.Dead;
+
+        if (attackRoutine != null)
+        {
+            StopCoroutine(attackRoutine);
+            attackRoutine = null;
+        }
+
+        attackInProgress = false;
         agent.isStopped = true;
         agent.ResetPath();
 
@@ -221,15 +273,35 @@ public class RhinoAI : MonoBehaviour
     // ---------- CALLED BY ANIMATION EVENTS ----------
     public void ApplyDamage()
     {
-        if (isDead || player == null) return;
+        ResolveAttackDamage();
+    }
 
-        if (Vector3.Distance(transform.position, player.position) <= attackRange + 0.5f)
+    private void ResolveAttackDamage()
+    {
+        if (!attackInProgress || attackDamageResolved || isDead || player == null)
+            return;
+
+        // Resolve only once per attack, whether this method was reached by the
+        // animation event or by AttackSequence's fallback.
+        attackDamageResolved = true;
+
+        Vector3 toPlayer = player.position - transform.position;
+        toPlayer.y = 0f;
+        float damageRange = attackRange + attackRangeBuffer;
+
+        if (toPlayer.sqrMagnitude > damageRange * damageRange)
+            return;
+
+        if (playerHealth == null)
+            FindPlayer();
+
+        if (playerHealth != null)
         {
-            // Prefer direct call — SendMessage is fragile
-            if (playerHealth != null)
-                playerHealth.TakeDamage(attackDamage);
-            else
-                player.SendMessage("TakeDamage", attackDamage, SendMessageOptions.DontRequireReceiver);
+            playerHealth.TakeDamage(attackDamage);
+        }
+        else
+        {
+            Debug.LogWarning("[RhinoAI] The tagged Player has no PlayerHealth component.", player);
         }
     }
 
